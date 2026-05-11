@@ -1,40 +1,29 @@
 name: Rust Build & Package
 
 on:
-  # این workflow به صورت دستی قابل اجراست
   workflow_dispatch:
-
-  # یا می‌توانید تنظیم کنید که با push به شاخه main اجرا شود
-  # push:
-  #   branches: [ main ]
 
 jobs:
   build:
-    # این job روی آخرین نسخه ویندوز اجرا می‌شود تا فایل exe ساخته شود
     runs-on: windows-latest
 
     steps:
-      # 1. دریافت کد پروژه از ریپو
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. نصب Rust toolchain
-      # استفاده از اکشن پیشنهادی و حذف پارامترهای اضافی
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        # toolchain: stable # نیازی به این خط نیست چون stable پیش‌فرض است
-        # profile: minimal # این پارامتر در این اکشن پشتیبانی نمی‌شود
-        # override: true # این پارامتر باعث خطا شده بود و حذف می‌شود
 
-      # 3. ساخت پروژه در حالت Release
-      # --verbose برای نمایش جزئیات بیشتر در خروجی Actions
       - name: Build release project
-        run: cargo build --release --verbose
+        run: cargo build --release
 
-      # 4. آپلود خروجی build شده (فایل exe) به عنوان Artifact
-      # این فایل‌ها پس از پایان run workflow قابل دانلود خواهند بود
+      - name: Archive release files
+        run: |
+          cd target/release
+          7z a ../../release_files.zip ./*
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hello_rust-windows-exe # نام artifact
-          path: target/release/hello_rust.exe # مسیر فایل اجرایی
+          name: hello_rust-windows-release
+          path: release_files.zip
