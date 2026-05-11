@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # برای push کردن به ریپو
+  contents: write
 
 jobs:
-  build_and_push: # نام job را تغییر دادیم تا ماهیت کار را بهتر نشان دهد
+  build_and_push:
     runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # برای دسترسی کامل به تاریخچه Git
+          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -22,14 +22,14 @@ jobs:
       - name: Build release project
         run: cargo build --release
 
-      # --- مراحل جدید برای Git ---
+      # --- مرحله اصلاح شده برای ساخت پوشه ---
       - name: Create output directory for executable
+        shell: pwsh # مشخص می‌کنیم که این مرحله با PowerShell اجرا شود
         run: |
-          if not exist bin mkdir bin
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
 
       - name: Copy executable to bin directory
-        # نام فایل اجرایی در ویندوز معمولا .exe است. اگر نام پروژه شما hello_rust است، فایل hello_rust.exe خواهد بود.
-        # مسیر را مطابق با نام پروژه‌تان تنظیم کنید.
+        # مطمئن شوید نام فایل اجرایی درست است. در ویندوز معمولا hello_rust.exe است.
         run: copy target\release\hello_rust.exe .\bin\hello_rust.exe
 
       - name: Configure Git
@@ -42,28 +42,10 @@ jobs:
 
       - name: Commit changes
         run: |
-          # بررسی می‌کنیم که آیا تغییری برای commit وجود دارد یا نه
           git diff --staged --quiet || git commit -m "Add/Update Windows release executable"
 
       - name: Push changes to repository
-        # از --force-with-lease برای push امن‌تر استفاده می‌کنیم
         run: |
           git push origin HEAD:${{ github.ref }} --force-with-lease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # --- حذف مرحله Archive و Upload Artifact ---
-      # شما گفتید فایل exe را در ریپو می‌خواهید، پس دیگر نیازی به ساخت zip و آپلود artifact نیست.
-      # اگر همچنان می‌خواهید artifact را داشته باشید، می‌توانید این بخش را نگه دارید،
-      # اما به خاطر داشته باشید که artifact و فایل exe در ریپو هر دو وجود خواهند داشت.
-      # - name: Archive release files
-      #   run: |
-      #     cd target/release
-      #     7z a ../../release_files.zip ./*
-      #
-      # - name: Upload build artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: hello_rust-windows-release
-      #     path: release_files.zip
-
