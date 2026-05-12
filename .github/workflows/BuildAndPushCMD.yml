@@ -1,1 +1,50 @@
+name: Rust Build & Push EXE
 
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build_and_push:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release project
+        run: cargo build --release
+
+      # --- مرحله اصلاح شده برای ساخت پوشه ---
+      - name: Create output directory for executable
+        shell: cmd # مشخص می‌کنیم که این مرحله با CMD اجرا شود
+        run: if not exist bin mkdir bin
+
+      - name: Copy executable to bin directory
+        # مطمئن شوید نام فایل اجرایی درست است. در ویندوز معمولا hello_rust.exe است.
+        run: copy target\release\hello_rust.exe .\bin\hello_rust.exe
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add executable to Git
+        run: git add bin/hello_rust.exe
+
+      - name: Commit changes
+        run: |
+          git diff --staged --quiet || git commit -m "Add/Update Windows release executable"
+
+      - name: Push changes to repository
+        run: |
+          git push origin HEAD:${{ github.ref }} --force-with-lease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
