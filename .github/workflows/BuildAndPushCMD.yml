@@ -1,4 +1,4 @@
-name: Rust Build & Push EXE
+name: Rust Build & Push CMD EXE
 
 on:
   workflow_dispatch:
