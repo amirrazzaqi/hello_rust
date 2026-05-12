@@ -1,16 +1,16 @@
-name: Rust Build & Publish Dynamic Release (No Lock File)
+name: Rust Build & Publish DYNAMIC Release
 
 on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Release tag name (e.g., v0.2.0)"
+        description: "Release tag name (e.g. v0.1.1)"
         required: true
-        default: "v0.2.0"
+        default: "v0.1.1"
       release_name:
-        description: "Release title (e.g., Version 0.2.0)"
+        description: "Release title"
         required: true
-        default: "Version 0.2.0"
+        default: "Version 0.1.1"
 
 permissions:
   contents: write
@@ -22,80 +22,72 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Fetch all history to ensure Cargo.toml is available
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Get Package Version from Cargo.toml
-  id: get_version
-  shell: pwsh
-  run: |
-    $inPackage = $false
-    $version = $null
+        id: get_version
+        shell: pwsh
+        run: |
+          $inPackage = $false
+          $version = $null
 
-    Get-Content "Cargo.toml" | ForEach-Object {
-      $line = $_.Trim()
+          Get-Content "Cargo.toml" | ForEach-Object {
+            $line = $_.Trim()
 
-      if ($line -eq "[package]") {
-        $inPackage = $true
-        return
-      }
+            if ($line -eq "[package]") {
+              $inPackage = $true
+              return
+            }
 
-      if ($inPackage -and $line -match '^version\s*=\s*"(.*)"\s*$') {
-        $version = $Matches[1]
-        return
-      }
+            if ($inPackage -and $line -match '^version\s*=\s*"(.*)"\s*$') {
+              $version = $Matches[1]
+              return
+            }
 
-      # اگر به بخش بعدی رسیدیم و نسخه را پیدا نکرده بودیم، دیگر جستجو نکن
-      if ($inPackage -and $line -match '^\[.*\]$' -and $line -ne "[package]") {
-        return
-      }
-    }
+            if ($inPackage -and $line -match '^\[.*\]$' -and $line -ne "[package]") {
+              return
+            }
+          }
 
-    if (-not $version) {
-      Write-Error "Could not extract version from Cargo.toml"
-      exit 1
-    }
+          if (-not $version) {
+            Write-Error "Could not extract version from Cargo.toml"
+            exit 1
+          }
 
-    Write-Host "Package version is: $version"
-    "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Package version is: $version"
+          "version=$version" >> $env:GITHUB_OUTPUT
 
-
-      - name: Build release project
+      - name: Build release
         run: cargo build --release
 
-      - name: Define output directory and file names
-        id: define_names # Added ID for this step
+      - name: Prepare release files
+        id: prepare_files
         shell: pwsh
         run: |
           $version = "${{ steps.get_version.outputs.version }}"
-          # Ensure the base name 'hello_rust' is correct for your project
           $baseName = "hello_rust"
-          $exeName = "${baseName}-$version.exe" # Dynamic executable name
-          $zipName = "${baseName}-windows-v$version.zip" # Dynamic zip name
 
-          # Create output directory
+          $exeName = "$baseName-$version.exe"
+          $zipName = "$baseName-$version.zip"
+
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          # Copy executable to dist with dynamic name
-          # Make sure 'target/release/hello_rust.exe' is the correct path to your executable
+
           Copy-Item "target/release/$baseName.exe" "dist/$exeName" -Force
-          # Create ZIP archive with dynamic name
           Compress-Archive -Path "dist/$exeName" -DestinationPath "dist/$zipName" -Force
 
-          # Set outputs for file names to be used in the release step
-          echo "executable_file=$exeName" >> $env:GITHUB_OUTPUT
-          echo "zip_file=$zipName" >> $env:GITHUB_OUTPUT
+          "exe_name=$exeName" >> $env:GITHUB_OUTPUT
+          "zip_name=$zipName" >> $env:GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
           name: ${{ github.event.inputs.release_name }}
-          # Use the outputs from the 'define_names' step
           files: |
-            dist/${{ steps.define_names.outputs.executable_file }}
-            dist/${{ steps.define_names.outputs.zip_file }}
+            dist/${{ steps.prepare_files.outputs.exe_name }}
+            dist/${{ steps.prepare_files.outputs.zip_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
