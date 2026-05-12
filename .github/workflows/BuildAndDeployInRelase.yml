@@ -1,1 +1,59 @@
+name: Rust Build & Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag name"
+        required: true
+        default: "v1.0.0"
+      release_name:
+        description: "Release title"
+        required: true
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build_and_release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release project
+        run: cargo build --release
+
+      - name: Create output directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+      - name: Copy executable to dist
+        shell: pwsh
+        run: |
+          Copy-Item "target/release/hello_rust.exe" "dist/hello_rust.exe" -Force
+
+      - name: Create ZIP archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/hello_rust.exe" -DestinationPath "dist/hello_rust-windows.zip" -Force
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: ${{ github.event.inputs.release_name }}
+          files: |
+            dist/hello_rust.exe
+            dist/hello_rust-windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
