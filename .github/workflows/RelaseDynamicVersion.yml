@@ -1,4 +1,4 @@
-name: Rust Build & Publish Dynamic Release
+name: Rust Build & Publish Dynamic Release (No Lock File)
 
 on:
   workflow_dispatch:
@@ -23,38 +23,52 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Fetch all history to ensure Cargo.toml is available
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Get Package Version
+      - name: Get Package Version from Cargo.toml
         id: get_version
         shell: pwsh
         run: |
-          # Use cargo pkgid to get package information including version
-          $pkgid = cargo pkgid
-          # Extract the version number. Example output: hello_rust v0.2.0 (...)
-          # We want to extract '0.2.0'
-          $version = ($pkgid -split " ")[2]
-          Write-Host "Package version is: $version"
-          # Set the output for use in other steps
-          echo "version=$version" >> $env:GITHUB_OUTPUT
+          # Read Cargo.toml content
+          $cargoTomlContent = Get-Content -Path "Cargo.toml" -Raw
+
+          # Extract the version using regex. This assumes a standard format like:
+          # [package]
+          # name = "..."
+          # version = "..."
+          $regex = '\\[package\\]\\s*.*?version\\s*=\\s*"([^"]+)"'
+          $match = [regex]::Match($cargoTomlContent, $regex, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+
+          if ($match.Success) {
+              $version = $match.Groups[1].Value
+              Write-Host "Package version is: $version"
+              echo "version=$version" >> $env:GITHUB_OUTPUT
+          } else {
+              Write-Error "Could not extract version from Cargo.toml. Ensure the format is correct."
+              exit 1
+          }
 
       - name: Build release project
         run: cargo build --release
 
       - name: Define output directory and file names
+        id: define_names # Added ID for this step
         shell: pwsh
         run: |
           $version = "${{ steps.get_version.outputs.version }}"
-          $exeName = "hello_rust-$version.exe" # Dynamic executable name
-          $zipName = "hello_rust-windows-v$version.zip" # Dynamic zip name
+          # Ensure the base name 'hello_rust' is correct for your project
+          $baseName = "hello_rust"
+          $exeName = "${baseName}-$version.exe" # Dynamic executable name
+          $zipName = "${baseName}-windows-v$version.zip" # Dynamic zip name
 
           # Create output directory
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           # Copy executable to dist with dynamic name
-          Copy-Item "target/release/hello_rust.exe" "dist/$exeName" -Force
+          # Make sure 'target/release/hello_rust.exe' is the correct path to your executable
+          Copy-Item "target/release/$baseName.exe" "dist/$exeName" -Force
           # Create ZIP archive with dynamic name
           Compress-Archive -Path "dist/$exeName" -DestinationPath "dist/$zipName" -Force
 
@@ -67,9 +81,9 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
           name: ${{ github.event.inputs.release_name }}
+          # Use the outputs from the 'define_names' step
           files: |
             dist/${{ steps.define_names.outputs.executable_file }}
             dist/${{ steps.define_names.outputs.zip_file }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
